@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>刀鋒 Nyx 版 — 動態武俠 RPG</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;600;900');
+  body{background:#0a0a0a;color:#c8c3b8;font-family:'Noto Serif TC',serif;padding:16px;max-width:800px;margin:0 auto;font-size:15px;line-height:1.7}
+  .top{display:flex;justify-content:space-between;border-bottom:1px solid #2a2a2a;padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap;gap:4px}
+  .title{color:#b89b6b;font-weight:900;letter-spacing:2px}
+  .st{font-size:12px;font-family:monospace;color:#777;display:flex;gap:10px;flex-wrap:wrap}
+  .sc{margin-bottom:14px}
+  .sc p{margin-bottom:7px}
+  .gold{color:#b89b6b}
+  .blue{color:#6b8bb8;font-size:13px;font-family:monospace}
+  .green{color:#7a7;font-size:13px;font-family:monospace}
+  .sel{border-top:1px solid #222;padding-top:12px}
+  .b{display:block;width:100%;background:#1a1a1a;color:#c8c3b8;border:1px solid #2a2a2a;border-radius:5px;padding:9px 12px;margin-bottom:6px;text-align:left;font-size:14px;font-family:inherit;cursor:pointer}
+  .b:hover{background:#222;border-color:#b89b6b}
+  .b:disabled{opacity:.3;cursor:default}
+  .cx{display:none;gap:6px;margin-top:8px}
+  .cx.on{display:flex}
+  #ci{flex:1;background:#0d0d0d;color:#c8c3b8;border:1px solid #333;border-radius:4px;padding:7px 10px;font-family:inherit;font-size:14px}
+  #ci:focus{border-color:#b89b6b;outline:none}
+  #cs{background:#b89b6b;color:#0a0a0a;border:none;border-radius:4px;padding:7px 14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .inv{border-top:1px solid #222;margin-top:12px;padding-top:10px;display:flex;flex-wrap:wrap;gap:4px;font-size:12px;font-family:monospace;color:#666}
+  .ii{background:#151515;color:#999;padding:2px 6px;border-radius:3px;border:1px solid #222}
+  .ld{color:#555;font-family:monospace;text-align:center;padding:20px;animation:pls 1.5s infinite;display:none}
+  @keyframes pls{0%,100%{opacity:.4}50%{opacity:1}}
+  .bt{background:#222;color:#888;border:1px solid #333;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px}
+  .bt:hover{background:#333;color:#bbb}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#b89b6b;padding:6px 14px;border-radius:4px;font-size:12px;z-index:999;display:none}
+</style>
+</head>
+<body>
+<div class="top">
+  <span class="title">⚔ 刀鋒 · Nyx 引擎</span>
+  <span class="st" id="st">❤100 🌀0 🪙0 第0輪</span>
+</div>
+<div id="ld" class="ld">☯ 江湖風起雲湧...</div>
+<div class="sc" id="sc"></div>
+<div class="sel" id="sel"></div>
+<div class="cx" id="cx">
+  <input id="ci" placeholder="輸入你想做嘅事...">
+  <button id="cs">⚔ 行動</button>
+</div>
+<div class="inv" id="inv"></div>
+<div><button class="bt" onclick="if(confirm('重新開始？')){clearGame();location.reload()}">🔄 重新</button><button class="bt" onclick="save()">💾 保存</button></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+//  刀鋒 Nyx 版 — GitHub Pages + Nyx Agent Backend
+//  呢個 HTML 係純 display + relay
+//  所有 game logic 由 Nyx (OpenClaw background agent) 生成
+// ============================================================
+
+const GATEWAY_URL = 'https://api.openclaw.ai';
+
+const d = id=>document.getElementById(id);
+const sc = d('sc'), sel = d('sel'), cx = d('cx'), ci = d('ci'), cs = d('cs'), inv = d('inv'), st = d('st'), ld = d('ld'), toast = d('toast');
+
+let G = {
+  hp:100, maxHp:100, qi:0, sil:30, round:0,
+  inv:['生鏽鐵劍「霜寒」'], skills:[], wounds:[],
+  name:'', cls:'',
+  loc:'破廟', time:'?', go:false,
+  pending: false,
+  sessionKey: 'nyx-blade-' + Date.now(),
+};
+
+function showToast(m) { toast.textContent=m; toast.style.display='block'; setTimeout(()=>toast.style.display='none',2500); }
+
+function ui() {
+  let hc = G.hp<=20?'color:#c44':G.hp<=50?'color:#ca4':'color:#a99';
+  st.innerHTML = `<span style="${hc}">❤${G.hp}/${G.maxHp}</span> 🌀${G.qi} 🪙${G.sil} 📍${G.loc} 第${G.round}輪`;
+  let h=''; G.inv.forEach(i=>h+=`<span class="ii">${i}</span> `);
+  G.skills.forEach(s=>h+=`<span class="ii" style="color:#8b6">📖${s}</span> `);
+  G.wounds.forEach(w=>h+=`<span class="ii" style="color:#c44">🏥${w}</span> `);
+  inv.innerHTML = h||'<span style="color:#444">空手空囊</span>';
+}
+
+function addScene(html) { sc.innerHTML += html; window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); }
+function setLoading(on) { ld.style.display = on?'block':'none'; }
+function save() { try { localStorage.setItem('nyx_blade_gh', JSON.stringify(G)); } catch(e) {} showToast('✅ 已保存'); }
+function clearGame() { localStorage.removeItem('nyx_blade_gh'); }
+
+function showChoices(list, custom) {
+  sel.innerHTML = ''; cx.classList.remove('on');
+  list.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'b'; b.textContent = c;
+    b.onclick = ()=>{
+      document.querySelectorAll('.b').forEach(x=>x.disabled=true);
+      cx.classList.remove('on');
+      sendAction(c);
+    };
+    sel.appendChild(b);
+  });
+  if (custom) { cx.classList.add('on'); ci.value=''; ci.focus(); }
+}
+
+// ===== Send action to Nyx via OpenClaw API =====
+async function sendAction(action) {
+  G.round++;
+  addScene(`<p class="blue" style="color:#555;font-style:italic">▶ ${action}</p>`);
+  ui(); setLoading(true);
+  G.pending = true;
+  save();
+  
+  try {
+    const resp = await fetch(`${GATEWAY_URL}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer OPENCLAW_API_KEY_PLACEHOLDER'
+      },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-v4-flash',
+        messages: [
+          {role: 'system', content: `你係「刀鋒 Nyx 版」RPG 嘅遊戲引擎 GM。一個極高自由度嘅純文字武俠生存 RPG。
+
+玩家叫「霜寒」，係一個記憶全失嘅流浪劍客，腰間有生鏽鐵劍「霜寒」。
+世界係架空古代中國，青雲鎮係約百戶人家嘅小鎮。
+玩家而家喺 ${G.loc}，第 ${G.round} 輪。
+
+【玩家狀態】HP:${G.hp}/${G.maxHp} | 真氣:${G.qi} | 銀兩:${G.sil}
+【物品】${G.inv.join(', ') || '無'}
+【技能】${G.skills.join(', ') || '無'}
+【傷勢】${G.wounds.join(', ') || '無'}
+
+規則：
+- 用繁體中文，古風敘事，每一個選擇有後果
+- 真實傷病、善惡名聲、非戰鬥技能
+- 直接輸出劇情，唔要英文備註
+- 結尾俾 4-5 行選項（數字開頭），最後一個係「✏️ 自訂行動」
+- 如果有獲得物品/傷害變化，用 [ITEM], [DAMAGE], [QI], [SILVER] 標記`},
+          {role: 'user', content: `玩家選擇：${action}\n\n請生成下一段劇情，然後俾新選項。`}
+        ],
+        temperature: 0.85,
+        max_tokens: 1200,
+      })
+    });
+    
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`${resp.status}: ${err.slice(0,100)}`);
+    }
+    
+    const data = await resp.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    setLoading(false);
+    G.pending = false;
+    applyResult(text);
+    
+  } catch(e) {
+    setLoading(false);
+    showToast('⚠ API Error: ' + e.message);
+    G.pending = false;
+  }
+}
+
+function applyResult(text) {
+  // Remove loading indicator
+  const last = sc.lastElementChild;
+  if (last && last.textContent.startsWith('▶')) sc.removeChild(last);
+  
+  // Parse markers
+  const dmg = text.match(/\[DAMAGE\](\d+)/);
+  const qi = text.match(/\[QI\](-?\d+)/);
+  const sil = text.match(/\[SILVER\](-?\d+)/);
+  const items = [...text.matchAll(/\[ITEM\](.+?)(?:\n|$)/g)];
+  
+  if (dmg) G.hp = Math.max(0, G.hp - parseInt(dmg[1]));
+  if (qi) G.qi = Math.max(0, G.qi + parseInt(qi[1]));
+  if (sil) G.sil = Math.max(0, G.sil + parseInt(sil[1]));
+  items.forEach(m => { const item = m[1].trim(); if (item && !G.inv.includes(item)) G.inv.push(item); });
+  
+  // Clean markers
+  let clean = text.replace(/\[DAMAGE\]\d+/g,'').replace(/\[QI\]-?\d+/g,'')
+                  .replace(/\[SILVER\]-?\d+/g,'').replace(/\[ITEM\].+?(?:\n|$)/g,'').trim();
+  
+  // Render scene
+  const paras = clean.split('\n').filter(l => l.trim());
+  let html = '';
+  paras.forEach(p => {
+    p = p.trim();
+    if (!p) return;
+    if (p.startsWith('「')||p.startsWith('>「')) html += `<p class="gold">${p}</p>`;
+    else if (p.startsWith('【')||p.startsWith('*')) html += `<p class="blue">${p}</p>`;
+    else if (p === '---') html += '<hr>';
+    else html += `<p>${p}</p>`;
+  });
+  addScene(html);
+  
+  // Parse choices
+  const choiceLines = clean.split('\n').filter(l => /^\d+\./.test(l.trim()));
+  const hasCustom = clean.includes('✏️');
+  
+  if (choiceLines.length > 0) {
+    showChoices(choiceLines.map(c=>c.trim()), hasCustom);
+  } else {
+    showChoices(['✏️ 自訂行動'], true);
+  }
+  
+  ui(); save();
+}
+
+// Custom submit
+cs.onclick = ()=>{
+  const v = ci.value.trim();
+  if (!v) return; ci.value=''; cx.classList.remove('on');
+  sendAction('✏️ ' + v);
+};
+ci.onkeydown = e=>{if(e.key==='Enter')cs.click()};
+
+// Init
+function init() {
+  const saved = localStorage.getItem('nyx_blade_gh');
+  if (saved) {
+    try {
+      const p = JSON.parse(saved);
+      if (p && p.round > 0 && !p.go) {
+        Object.assign(G, p);
+        addScene(`<p class="blue">（載入 — 第${G.round}輪 · ${G.loc}）</p>`);
+        // Try to continue
+        sendAction('繼續');
+        ui(); return;
+      }
+    } catch(e) {}
+  }
+  
+  addScene(`<p>寒風如刀，你睜開眼，發現自己身處一個破廟。廟頂漏水，地上鋪著發霉的稻草。</p>
+<p>你渾身痠痛，衣衫襤褸。唯一值錢的，是腰間一把生了鏽的鐵劍，劍柄刻住「霜寒」二字。</p>
+<p class="gold">你唔記得自己係邊個。</p>
+<p class="gold">「七月十五，青雲鎮，酉時。」——一張發黃嘅舊紙上寫著。</p>`);
+  showChoices(['⚔ 開始你的一生'], false);
+  ui();
+}
+
+init();
+</script>
+</body>
+</html>

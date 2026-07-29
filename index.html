@@ -32,12 +32,19 @@
   .bt{background:#222;color:#888;border:1px solid #333;border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px}
   .bt:hover{background:#333;color:#bbb}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#333;color:#b89b6b;padding:6px 14px;border-radius:4px;font-size:12px;z-index:999;display:none}
+  .sp{text-align:center;margin-bottom:10px;padding:6px;background:#111;border:1px solid #222;border-radius:6px}
+  .sp canvas{image-rendering:pixelated}
+  .spl{font-size:11px;color:#888;margin-top:3px}
 </style>
 </head>
 <body>
 <div class="top">
   <span class="title">⚔ 刀鋒 · Nyx 引擎</span>
   <span class="st" id="st">❤100 🌀0 🪙0 第0輪</span>
+</div>
+<div class="sp">
+  <canvas id="spr-frost" width="160" height="220" style="background:#0d0d0d"></canvas>
+  <div class="spl">&#9876; 霜寒 · 流浪劍客</div>
 </div>
 <div id="ld" class="ld">☯ 江湖風起雲湧...</div>
 <div class="sc" id="sc"></div>
@@ -52,12 +59,44 @@
 
 <script>
 // ============================================================
+//  霜寒 Sprite · Pixel Art
+// ============================================================
+(function(){
+  var c = document.getElementById('spr-frost');
+  if(!c) return;
+  var ctx = c.getContext('2d'), W=160, H=220;
+  var SKIN='#d4a574',SKIN_S='#b8885a',HAIR='#2a1a0a';
+  var ROBE='#3a3a5a',ROBE_S='#2a2a4a',BELT='#8b6';
+  var BOOT='#3a2a1a',SWORD='#aac',SWORD_S='#668';
+  var EYE='#4af',SCARF='#6bb',BG='#0d0d0d';
+  function p(x,y,w,h,col){ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
+  p(0,0,W,H,BG);
+  p(60,16,40,12,HAIR);p(56,24,12,8,HAIR);p(92,24,12,8,HAIR);
+  p(52,28,8,20,HAIR);p(100,28,8,20,HAIR);p(56,44,8,16,HAIR);p(96,44,8,16,HAIR);
+  p(64,28,32,28,SKIN);p(68,24,24,8,SKIN);
+  p(64,52,32,8,SCARF);p(60,56,8,12,SCARF);p(92,56,8,12,SCARF);p(68,60,24,4,SCARF);
+  p(72,36,6,3,'#fff');p(82,36,6,3,'#fff');p(73,37,3,2,EYE);p(84,37,3,2,EYE);
+  p(60,64,40,52,ROBE);p(56,68,8,40,ROBE);p(96,68,8,40,ROBE);p(64,64,32,4,ROBE_S);
+  p(60,108,40,8,BELT);p(56,110,8,4,BELT);p(96,110,8,4,BELT);
+  p(52,72,8,36,ROBE);p(48,76,8,28,ROBE);p(48,104,8,8,SKIN);
+  p(100,72,8,36,ROBE);p(104,76,8,28,ROBE);p(104,104,8,8,SKIN);
+  p(108,56,4,80,SWORD_S);p(108,52,4,8,SWORD);p(104,48,12,8,'#b89b6b');
+  p(108,124,4,20,SWORD_S);p(110,56,2,68,'rgba(100,180,255,0.3)');
+  p(64,116,12,44,BOOT);p(84,116,12,44,BOOT);p(60,116,8,40,ROBE_S);p(92,116,8,40,ROBE_S);
+  p(62,156,16,12,BOOT);p(82,156,16,12,BOOT);
+  p(56,64,8,24,SCARF);p(96,64,8,24,SCARF);p(52,72,8,16,SCARF);p(100,72,8,16,SCARF);
+})();
+
+// ============================================================
 //  刀鋒 Nyx 版 — GitHub Pages + Nyx Agent Backend
 //  呢個 HTML 係純 display + relay
 //  所有 game logic 由 Nyx (OpenClaw background agent) 生成
 // ============================================================
 
-const GATEWAY_URL = 'https://api.openclaw.ai';
+// No API key in client! Nyx generates via relay endpoint.
+// For now, use local server relay. When deployed via GitHub Pages,
+// Nyx will update this to point at the relay endpoint.
+const RELAY_URL = window.location.origin + '/api/blade';
 
 const d = id=>document.getElementById(id);
 const sc = d('sc'), sel = d('sel'), cx = d('cx'), ci = d('ci'), cs = d('cs'), inv = d('inv'), st = d('st'), ld = d('ld'), toast = d('toast');
